@@ -148,32 +148,102 @@ $ docker push <your_username>/hello-world:1.0
 
 Now for something more complicated. In Module 04 we worked with a legacy application called the Chimera Reporting Server. In the remainder of this exercise we are going to convert that application to using Docker. This process is sometimes called "dockerising" or "containerising" an application.
 
-Fortunately, we already have Dockerfiles for each part of the application. You can find these in [./dockerfiles](./dockerfiles). 
-
-When you download [./dockerfiles/run.sh](./dockerfiles/run.sh), make sure to create it with LF line endings so it can run in the Linux container.
-
-This application will run slightly differently to the previous module. The `webapp` container will still serve a simple website, but the `cliapp` container behaves slightly differently. From reading the Dockerfile and associated script can you work out what it will do?
+Fortunately, we already have Dockerfiles for each part of the application. You can find these in [./dockerfiles](./dockerfiles).
 
 To complete this section you then need to complete the following tasks:
 
-### 01: Build the containers
+### 01: Build the images
+
 You will need to build each container separately using `docker build`. Make sure you choose an appropriate tag.
 
-Hint: you may find the `-f` option helpful.
+Hint: you will need to use docker build's `-f` option.
 
-### 02: Run the containers
-Running each container with `docker run` is fairly straightforward. However, the containers will need a way to communicate; we suggest you create and `--mount` a **shared volume**. You'll also need to `--publish` a port if you want to see your handiwork.
+### 02: Script the cliapp
 
-Visit localhost:\<port-number>/all_day in a browser to see the webapp displaying data processed by cliapp.
+You should be able to run the cliapp using image tag you created in the previous step, e.g. `docker run cliapp --help`.
+That's not very useful on it's own though! We want to generate some interesting datasets to feed into the webapp.
 
-Note for those using Git for Windows: it automatically expands any absolute paths it detects in your command. Use a double slash at the start to prevent this e.g. `//dont/expand/me`
+We've provided a script "run.sh" that will generate three datasets, very similar to the one you will have written last workshop!
+Edit Dockerfile.cliapp to copy in the script and set it as the entrypoint.
 
-### 03: Refactor and improve!
-The Dockerfiles and bash script we've provided you aren't as good as they could be. Spend a little time trying to improve them before moving onto the next exercise.
+Once that's done, rebuild the image and check it works.
 
-To get started, take a look at Docker's official [best practices guide for writing Dockerfiles](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/).
+<details>
+<summary>Hints</summary>
+
+You'll need to:
+
+* COPY run.sh into the image
+* Make run.sh executable
+* Change the ENTRYPOINT to run the script
+
+<details>
+<summary>Answer</summary>
+
+Delete the existing ENTRYPOINT line and add the following in its place:
+
+```Dockerfile
+COPY ./run.sh ./run.sh
+RUN chmod +x run.sh
+ENTRYPOINT ["./run.sh"]
+```
+
+Copy "run.sh" into "dockerfiles/", then from that directory `docker build --tag cliapp --file Dockerfile.cliapp .`
+Make sure "run.sh" has LF line endings, VSCode will say in the bottom right if you open the file.
+
+</details>
+</details>
+
+### 03: Run the containers
+
+Running each container with `docker run` is fairly straightforward. However running them separately isn't very useful, we want the webapp to be able to read datasets that cliapp creates; we can do this by having them read and write from a **shared volume**.
+
+Use `docker run` commands to run the cliapp to write datasets to a shared volume, then run the webapp using the same volume.
+Don't forget to publish a port for the webapp if you want to see your handiwork.
+
+If you're not sure where to start, have a look at the [docker run docs](https://docs.docker.com/engine/reference/commandline/run/), or this [guide to Docker Volumes](https://www.digitalocean.com/community/tutorials/how-to-share-data-between-docker-containers).
+
+```text
+     --------------              --------------
+    |              |            |              |       forward port
+    |    cliapp    |            |    webapp    | :80 <----------------> local port
+    |              |            |              |
+     --------------              --------------
+               \                  ∧
+                \                /
+                 \              /
+    Writes to     \            /   Reads from
+ /opt/chimera/data \          / /opt/chimera/data
+                    ∨        /
+                 ----------------
+                | shared volume  |
+                 ----------------
+```
+
+Once that's done you should be able to visit `http://localhost:<port-number>/all_day` in a browser to see the webapp displaying data processed by cliapp.
+
+> Note for those using Git for Windows: it automatically expands any absolute paths it detects in your command. Use a double slash at the start to prevent this e.g. `//dont/expand/me`
+
+<details>
+<summary>Hints</summary>
+
+* The cliapp and webapp read and write from the directory specified by the `DATA_FOLDER` environment variable, which is set up in both Dockerfiles. That's the directory you need to mount as a volume inside the containers.
+* You can use the `--mount` or `-v`/`--volume` parameters to `docker run` for mounting volumes, either works, but they have different syntax.
+* Remember that anything after the image name in a `docker run` command is passed into the container, rather than being interpreted by `docker run`.
+  * So if we setup an image that echoes back its arguments:
+    ```sh
+    cat << EOF | docker build --tag echo-test -
+    FROM alpine
+    ENTRYPOINT ["echo"]
+    EOF
+    ```
+  * then `docker run echo-test -p 8080:80` would print "-p 8080:80", which probably wasn't intended!
+  * instead put any arguments to docker run before the image name i.e. `docker run -p 8080:80 echo-test`
+
+</details>
 
 ## Part 5: Docker Compose
+
 In the previous section we ended up constructing some reasonably long command line statements to build, configure and run our containers. This is error prone and doesn't scale well; consider how fiddly it was with just two containers!
 
 Fortunately there are tools that can help us automate these processes. We are going to use one called Docker Compose. You may already have this installed. Check by running `docker-compose --version` in your shell. (If not, you can find installation instructions [here](https://docs.docker.com/compose/install/)).
