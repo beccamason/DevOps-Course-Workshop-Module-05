@@ -1,9 +1,14 @@
 FROM ubuntu:xenial
 RUN apt-get update
-RUN apt-get install -y jq
+RUN apt-get install -y jq curl cron
 WORKDIR /opt/chimera/bin
 RUN curl https://devops-command-line-workshop.s3.eu-west-2.amazonaws.com/cliapp --output cliapp
 RUN chmod +x cliapp
+COPY ./run.sh /opt/chimera/bin/
+RUN touch /var/log/cron.log
+COPY ./cronjob /opt/chimera/bin/
+RUN crontab ./cronjob
 # The data folder should be shared with the webapp
 ENV DATA_FOLDER=/opt/chimera/data
 RUN mkdir /var/log/chimera
+ENTRYPOINT printenv >> /etc/environment && cron && tail -f /var/log/cron.log

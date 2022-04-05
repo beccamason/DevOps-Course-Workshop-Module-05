@@ -1,0 +1,21 @@
+version: "3"
+
+services:
+  cliapp:
+    build:
+      dockerfile: Dockerfile.cliapp
+      context: .
+    environment:
+      - REDIS_PORT=6379
+      - REDIS_HOST=redis
+  webapp:
+    build:
+      dockerfile: Dockerfile.webapp
+      context: .
+    ports: 
+      - "8080:80"
+    environment:
+      - REDIS_PORT=6379
+      - REDIS_HOST=redis
+  redis:
+    image: redis
